@@ -1,6 +1,7 @@
 from sqlalchemy import Column
 from sqlalchemy import DateTime
 from sqlalchemy import Float
+from sqlalchemy import Integer
 from sqlalchemy import String
 
 from . import Side
@@ -33,3 +34,14 @@ class StockTrade(Base):
 
     price = Column(Float, nullable=False)
     quantity = Column(Float, nullable=False)
+
+
+class StockSplit(Base):
+    """
+    This is updated manually, since at the time, I can't find an easy source for such data
+    (also, it's like super rare for my use cases).
+    """
+    name = Column(String, nullable=False)
+    date = Column(DateTime, nullable=False)
+    from_amount = Column(Integer, nullable=False)
+    to_amount = Column(Integer, nullable=False)

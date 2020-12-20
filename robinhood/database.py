@@ -86,6 +86,9 @@ class scoped_session(ScopedSession):
 
     @lru_cache(maxsize=1)
     def setup(self) -> None:
+        import robinhood.models.option      # noqa: F401
+        import robinhood.models.stock       # noqa: F401
+
         # Since we're using an on-disk sqlite3 database (as compared to a database server),
         # let's create the tables every time to make sure all tables are created for our
         # operations.

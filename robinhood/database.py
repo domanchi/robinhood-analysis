@@ -16,6 +16,8 @@ from sqlalchemy.orm.scoping import ScopedSession
 from sqlalchemy.orm.session import Session
 from sqlalchemy.types import TypeDecorator
 
+from .util import get_path_to
+
 
 class BaseMeta(DeclarativeMeta):
     """
@@ -92,7 +94,7 @@ class scoped_session(ScopedSession):
 
 
 # ENGINE_URI = ':memory:'
-ENGINE_URI = 'database.sqlite3'
+ENGINE_URI = get_path_to('database.sqlite3')
 session = scoped_session(
     sessionmaker(
         bind=create_engine(f'sqlite+pysqlite:///{ENGINE_URI}'),

@@ -8,6 +8,7 @@ from typing import Generator
 
 import pyotp
 
+from .util import get_path_to
 from pyrh import dump_session
 from pyrh import load_session
 from pyrh import Robinhood
@@ -18,7 +19,7 @@ from pyrh.exceptions import InvalidCacheFile
 @lru_cache(maxsize=1)
 def get_client():
     try:
-        client = load_session('session.json')
+        client = load_session(get_path_to('session.json'))
         client.user()
     except (AuthenticationError, InvalidCacheFile):
         email = os.environ.get('USERNAME') or input('Email: ')
@@ -26,7 +27,7 @@ def get_client():
         mfa_secret = os.environ.get('MFA_SECRET') or getpass('MFA Secret: ')
 
         client = login(email, password, mfa_secret)
-        dump_session(client, 'session.json')
+        dump_session(client, get_path_to('session.json'))
 
     return client
 

@@ -1,17 +1,17 @@
 from typing import Any
 from typing import Dict
-from typing import List
+from typing import Generator
 
 from pyrh import Robinhood
 
 
-def get_paginated_results(client: Robinhood, url: str) -> List[Dict[str, Any]]:
-    output = []
-
-    page = client.get(url)
-    output.extend(page['results'])
+def get_paginated_results(
+    client: Robinhood,
+    url: str,
+    **kwargs: Any
+) -> Generator[Dict[str, Any], None, None]:
+    page = client.get(url, **kwargs)
+    yield from page['results']
     while page['next']:
         page = client.get(page['next'])
-        output.extend(page['results'])
-
-    return output
+        yield from page['results']

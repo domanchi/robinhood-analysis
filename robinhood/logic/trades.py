@@ -1,58 +1,59 @@
-from collections import defaultdict
+import datetime
 from typing import Any
 from typing import Dict
+from typing import Generator
 from typing import List
+from typing import Optional
 
 from ..client import get_client
+from ..models.stock import StockTrade
 from ..util import get_paginated_results
-from .stocks import get_stock_ticker_from_instrument
-from pyrh.robinhood import Robinhood
+from .database.stock_trade import StockTradeDBLogic
 from pyrh.urls import ORDERS_BASE
 
 
-def get_orders() -> Dict[str, List[Dict[str, Any]]]:
+def get_stock_orders(
+    ticker: Optional[str] = None,
+    from_date: Optional[datetime.date] = None,
+    to_date: Optional[datetime.date] = None,
+) -> List[StockTrade]:
     """
-    :returns: abridged orders, grouped by stock ticker.
-        {
-            "side": "sell",
-            "shares": 34.00000000,
-            "price": 45.22260000,
-            "ticker": "WB",
-            "date": "2020-11-20T15:28:20.706000Z",
-            "state": "filled",
-        }
-
-        This does not include crypto trades, or option trades.
+    :param ticker: optional filter by ticker
+    :param from_date: optional filter by date. if not provided, will default to all time.
+    :param to_date: optional filter by date. if not provided, will default to today.
     """
-    client = get_client()
+    if not to_date:
+        to_date = datetime.date.today()
 
-    orders = _get_raw_orders(client)
+    logic = StockTradeDBLogic()
 
-    output = defaultdict(list)
-    for order in orders:
-        state = order['state']
-        if state != 'filled':
-            continue
+    # First, make sure your data is up-to-date.
+    last_known_trade_date = logic.get_last_known_trade_date()
+    if not last_known_trade_date or last_known_trade_date.date() < to_date:
+        parameters = {}
+        if last_known_trade_date:
+            # Smaller pages, since we only need to get the diff.
+            parameters['page_size'] = 10
 
-        ticker = get_stock_ticker_from_instrument(order['instrument'])
-        output[ticker].append({
-            'side': order['side'],
-            'shares': order['cumulative_quantity'],
-            'price': order['average_price'],
-            'ticker': ticker,
-            'date': order['last_transaction_at'],
-            'state': state,
-        })
+        for order in _get_raw_stock_orders(params=parameters):
+            state = order['state']
+            if state != 'filled':
+                # Ignore cancelled orders
+                continue
 
-        output[ticker].append(order)
+            item = logic.create_from_raw_payload(order)
+            if item.date < last_known_trade_date:
+                break
 
-    for key, value in output.items():
-        output[key] = sorted(value, key=lambda x: x['date'], reverse=True)
+    # Then, get results.
+    query = logic.filter_trades_between_dates(from_date, to_date)
+    if ticker:
+        query = query.filter(StockTrade.name == ticker)
 
-    return dict(output)
+    return query.all()
 
 
-def _get_raw_orders(client: Robinhood) -> List[Dict[str, Any]]:
+def _get_raw_stock_orders(**kwargs: Any) -> Generator[Dict[str, Any], None, None]:
     """
     :returns: a list of trades in the following format
     {
@@ -107,5 +108,7 @@ def _get_raw_orders(client: Robinhood) -> List[Dict[str, Any]]:
         },
         "investment_schedule_id": null
     }
+
+    We assume that it comes ordered by time (since that's how the web does it).
     """
-    return get_paginated_results(client, ORDERS_BASE)
+    yield from get_paginated_results(get_client(), ORDERS_BASE, **kwargs)

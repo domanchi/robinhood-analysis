@@ -30,6 +30,6 @@ class StockTradeDBLogic(DateMixin, BaseDBLogic):
                 payload['last_transaction_at'].rstrip('Z').split('.')[0],
                 '%Y-%m-%dT%H:%M:%S',
             ),
-            price=payload['average_price'],
-            quantity=payload['cumulative_quantity'],
+            price=float(payload['average_price']),
+            quantity=float(payload['cumulative_quantity']),
         )

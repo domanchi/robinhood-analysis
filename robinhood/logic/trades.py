@@ -1,7 +1,7 @@
 import datetime
 from typing import Any
 from typing import Dict
-from typing import Generator
+from typing import Iterator
 from typing import List
 from typing import Optional
 
@@ -19,6 +19,7 @@ def get_stock_orders(
     ticker: Optional[str] = None,
     from_date: Optional[datetime.date] = None,
     to_date: Optional[datetime.date] = None,
+    is_most_recent_first: bool = True,
 ) -> List[StockTrade]:
     """
     :param ticker: optional filter by ticker
@@ -48,15 +49,38 @@ def get_stock_orders(
             if last_known_trade_date and item.date < last_known_trade_date:
                 break
 
+        for event in _get_options_events(params=parameters):
+            date_string = event['updated_at']
+            for trade in event['equity_components']:
+                trade.update({
+                    'last_transaction_at': date_string,
+                    'average_price': trade['price'],
+                    'cumulative_quantity': trade['quantity'],
+                })
+
+                logic.create_from_raw_payload(trade)
+
+            if (
+                last_known_trade_date
+                and datetime.datetime.strptime(
+                    date_string.rstrip('Z').split('.')[0],
+                    '%Y-%m-%dT%H:%M:%S',
+                ) < last_known_trade_date
+            ):
+                break
+
     # Then, get results.
-    query = logic.filter_between_dates(from_date, to_date)
+    query = (
+        logic.filter_between_dates(from_date, to_date)
+        .order_by(logic.MODEL.date.desc() if is_most_recent_first else logic.MODEL.date.asc())
+    )
     if ticker:
         query = query.filter(StockTrade.name == ticker)
 
     return query.all()
 
 
-def _get_raw_stock_orders(**kwargs: Any) -> Generator[Dict[str, Any], None, None]:
+def _get_raw_stock_orders(**kwargs: Any) -> Iterator[Dict[str, Any]]:
     """
     :returns: a list of trades in the following format
     {
@@ -152,7 +176,7 @@ def get_options_orders(
     return logic.hydrate(*query.all())
 
 
-def _get_raw_options_orders(**kwargs: Any) -> Generator[Dict[str, Any], None, None]:
+def _get_raw_options_orders(**kwargs: Any) -> Iterator[Dict[str, Any]]:
     """
     :returns: a list of trades in the following format
     {
@@ -202,3 +226,44 @@ def _get_raw_options_orders(**kwargs: Any) -> Generator[Dict[str, Any], None, No
     # NOTE: This is BIZARRE. The trailing slash is necessary, otherwise it won't be able to find
     # the URL.
     return get_paginated_results(get_client(), OPTIONS_BASE / 'orders/', **kwargs)
+
+
+def _get_options_events(**kwargs) -> Iterator[Dict[str, Any]]:
+    """
+    :returns: events when an option has expired in the money, and therefore must be converted
+        into stock inventory.
+    {
+        "account": "https://api.robinhood.com/accounts/<accountID>/",
+        "cash_component": null,
+        "chain_id": "<UUID4>",
+        "created_at": "2018-09-07T20:55:03.749080Z",
+        "direction": "debit",
+        "equity_components": [
+            {
+                    "id": "<UUID4>",
+                    "instrument": "https://api.robinhood.com/instruments/9c53326c-d07e-4b82-82d2-b108ec5d9530/",    # noqa: E501
+                    "price": "175.0000",
+                    "quantity": "100.00000000",
+                    "side": "buy",
+                    "symbol": "SPOT"
+                }
+            ],
+        "event_date": "2018-09-07",
+        "id": "<UUID4>",
+        "option": "https://api.robinhood.com/options/instruments/824783d7-ffc8-4e1b-83f9-c1234099e9e1/",
+        "position": "https://api.robinhood.com/options/positions/<UUID4>/",
+        "quantity": "1.0000",
+        "source_ref_id": null,
+        "state": "confirmed",
+        "total_cash_amount": "17500.00",
+        "type": "exercise",
+        "underlying_price": "177.8000",
+        "updated_at": "2018-09-10T08:10:05.478568Z"
+    }
+    """
+    yield from filter(
+        lambda x: x['type'] != 'expiration',
+        get_paginated_results(
+            get_client(), OPTIONS_BASE / 'events/', **kwargs
+        ),
+    )

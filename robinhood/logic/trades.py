@@ -5,6 +5,7 @@ from typing import Iterator
 from typing import List
 from typing import Optional
 
+from .. import database
 from ..client import get_client
 from ..models.option import OptionStrategy
 from ..models.stock import StockTrade
@@ -19,7 +20,7 @@ def get_stock_orders(
     ticker: Optional[str] = None,
     from_date: Optional[datetime.date] = None,
     to_date: Optional[datetime.date] = None,
-    is_most_recent_first: bool = True,
+    most_recent_first: bool = True,
 ) -> List[StockTrade]:
     """
     :param ticker: optional filter by ticker
@@ -69,10 +70,12 @@ def get_stock_orders(
             ):
                 break
 
+    database.session.commit()
+
     # Then, get results.
     query = (
         logic.filter_between_dates(from_date, to_date)
-        .order_by(logic.MODEL.date.desc() if is_most_recent_first else logic.MODEL.date.asc())
+        .order_by(logic.MODEL.date.desc() if most_recent_first else logic.MODEL.date.asc())
     )
     if ticker:
         query = query.filter(StockTrade.name == ticker)

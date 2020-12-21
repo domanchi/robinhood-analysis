@@ -1,13 +1,13 @@
+# This differs from `setup.py` requirements since this declares the requirements
+# for running this module for the reports (rather than imported externally).
+
 # The actual API, inlined for the latest changes.
 # NOTE: For some reason, this method fails with `No module named setuptools`.
 # The current workaround is just to call the command (in the traceback) directly.
 # -e pyrh
 
-# Automated 2FA
-pyotp
-
-sqlalchemy
-
 # Powers jupyter notebook
 jupyter
 ipykernel
+pandas
+matplotlib

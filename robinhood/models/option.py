@@ -33,12 +33,22 @@ class Option(Base):
     expiration_date = Column(DateTime, nullable=False)
     strike_price = Column(Float, nullable=False)
 
+    @property
+    def serialized_name(self):
+        # https://en.wikipedia.org/wiki/Option_naming_convention
+        return '{ticker}{expiration_date}{type}{price}'.format(
+            ticker=self.name,
+            expiration_date=self.expiration_date.strftime('%y%m%d'),
+            type='C' if self.type == OptionType.CALL else 'P',
+            price='{:09.3f}'.format(self.strike_price).replace('.', ''),
+        )
+
 
 class OptionTrade(Base):
     """Represents one leg in an Options trade."""
     uuid = Column(String, nullable=False, unique=True)
 
-    option = Column(Integer, ForeignKey('option.id'))
+    option_id = Column(Integer, ForeignKey('option.id'))
     side = Column(SerializedEnum.specify(Side), nullable=False)
     date = Column(DateTime, nullable=False)
 

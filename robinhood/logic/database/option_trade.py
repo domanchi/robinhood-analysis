@@ -59,13 +59,12 @@ class OptionStrategyDBLogic(DateMixin, BaseDBLogic):
         trade_logic = OptionTradeDBLogic()
         leg_logic = OptionStrategyLegsDBLogic()
         for item in items:
-            item.legs = list(
-                trade_logic.get_by_ids(
-                    *[
-                        entry.trade_id
-                        for entry in leg_logic.get(strategy_id=item.id)
-                    ]
-                ).values(),
+            item.legs = trade_logic.hydrate(
+                *list(
+                    trade_logic.get_by_ids(
+                        *[entry.trade_id for entry in leg_logic.get(strategy_id=item.id)]
+                    ).values(),
+                )
             )
 
         return items
@@ -103,24 +102,27 @@ class OptionTradeDBLogic(BaseDBLogic):
 
         output = self.create(
             uuid=payload['id'],
-            option=option.id,
+            option_id=option.id,
             side=Side(payload['side']),
             date=datetime.datetime.strptime(
                 date.rstrip(
                     'Z',
                 ).split('.')[0], '%Y-%m-%dT%H:%M:%S',
             ),
-            price=price / len(payload['executions']),
-            quantity=quantity / len(payload['executions']),
+            price=price / len(payload['executions']),       # average price
+            quantity=quantity,
         )
 
+        # This is needed, so that an ID will be auto-assigned.
         database.session.commit()
         return output
 
     def hydrate(self, *items: OptionTradeModel) -> List[OptionTradeModel]:
-        options = OptionDBLogic().get_by_ids(*[item.option for item in items])
+        options = OptionDBLogic().get_by_ids(
+            *[item.option_id for item in items]
+        )
         for item in items:
-            item.option = options[item.option]
+            item.option = options[item.option_id]
 
         return items
 

@@ -18,8 +18,10 @@ from ...models.option import OptionTrade
 from ...models.stock import StockSplit
 from ...models.stock import StockTrade
 from ..database.stock_split import StockSplitDBLogic
+from ..trades import get_options_expirations
 from ..trades import get_options_orders
 from ..trades import get_stock_orders
+from ..trades import OptionExpiration
 
 
 class Stock(NamedTuple):
@@ -42,18 +44,20 @@ class Sale(NamedTuple):
 
 
 def get(
-    from_date: Optional[str] = None,
-    to_date: Optional[str] = None,
+    from_date: Optional[Union[datetime.date, str]] = None,
+    to_date: Optional[Union[datetime.date, str]] = None,
 ) -> pd.DataFrame:
     """
     :param from_date: YYYY-MM-DD format
     :param to_date: YYYY-MM-DD format
     """
+    if isinstance(from_date, str):
+        from_date = datetime.datetime.strptime(from_date, '%Y-%m-%d').date()
+    if isinstance(to_date, str):
+        to_date = datetime.datetime.strptime(to_date, '%Y-%m-%d').date()
+
     data: List[List[Any]] = []
-    for sale in _get_trades(
-        from_date=datetime.datetime.strptime(from_date, '%Y-%m-%d').date(),
-        to_date=datetime.datetime.strptime(to_date, '%Y-%m-%d').date(),
-    ):
+    for sale in _get_trades(from_date=from_date, to_date=to_date):
         data.append([
             sale.name,
             sale.bought.date,
@@ -104,6 +108,21 @@ def _get_trades(
                         lambda sale: sale.sold.date >= from_date,
                         portfolio.sell_option(leg),
                     )
+        elif isinstance(event, OptionExpiration):
+            trade = OptionTrade(
+                uuid='does-not-matter',
+                option_id=event.option.id,
+                side=Side.SELL,
+                date=event.option.expiration_date,
+                price=0,
+                quantity=event.quantity,
+            )
+            trade.option = event.option
+
+            yield from filter(
+                lambda sale: sale.sold.date >= from_date,
+                portfolio.sell_option(trade),
+            )
 
 
 def _get_events(
@@ -124,8 +143,19 @@ def _get_events(
         item.date: item
         for item in get_options_orders(to_date=to_date)
     }
+    options_expirations = {
+        item.option.expiration_date: item
+        for item in get_options_expirations(to_date=to_date)
+    }
 
-    events = sorted({**options_trades, **stock_splits, **stock_trades}.items())
+    events = sorted(
+        {
+            **options_expirations,
+            **options_trades,
+            **stock_splits,
+            **stock_trades,
+        }.items(),
+    )
     for event in map(lambda x: x[1], events):
         yield event
 

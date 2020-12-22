@@ -3,13 +3,16 @@ from typing import Any
 from typing import Dict
 from typing import Iterator
 from typing import List
+from typing import NamedTuple
 from typing import Optional
 
 from .. import database
 from ..client import get_client
+from ..models.option import Option
 from ..models.option import OptionStrategy
 from ..models.stock import StockTrade
 from ..util import get_paginated_results
+from .database.option import OptionDBLogic
 from .database.option_trade import OptionStrategyDBLogic
 from .database.stock_trade import StockTradeDBLogic
 from pyrh.urls import OPTIONS_BASE
@@ -50,7 +53,10 @@ def get_stock_orders(
             if last_known_trade_date and item.date < last_known_trade_date:
                 break
 
-        for event in _get_options_events(params=parameters):
+        for event in filter(
+            lambda x: x['type'] != 'expiration',
+            _get_options_events(params=parameters),
+        ):
             date_string = event['updated_at']
             for trade in event['equity_components']:
                 trade.update({
@@ -231,10 +237,39 @@ def _get_raw_options_orders(**kwargs: Any) -> Iterator[Dict[str, Any]]:
     return get_paginated_results(get_client(), OPTIONS_BASE / 'orders/', **kwargs)
 
 
+class OptionExpiration(NamedTuple):
+    option: Option
+    quantity: float
+
+
+def get_options_expirations(
+    to_date: Optional[datetime.date] = None,
+) -> Iterator[OptionExpiration]:
+    """
+    :returns: (option, quantity)
+    """
+    if to_date:
+        to_date = to_date.strftime('%Y-%m-%d')
+
+    logic = OptionDBLogic()
+    for event in filter(
+        lambda x: x['type'] == 'expiration',
+        _get_options_events(),
+    ):
+        if to_date and to_date < event['event_date']:
+            continue
+
+        yield OptionExpiration(
+            option=logic.get_from_instrument_url(event['option']),
+            quantity=float(event['quantity']),
+        )
+
+
 def _get_options_events(**kwargs) -> Iterator[Dict[str, Any]]:
     """
-    :returns: events when an option has expired in the money, and therefore must be converted
-        into stock inventory.
+    :returns: events when an option has expired.
+        when an option has expired in the money, it must be converted into stock inventory.
+        otherwise, it must be recorded as pure loss.
     {
         "account": "https://api.robinhood.com/accounts/<accountID>/",
         "cash_component": null,
@@ -264,9 +299,4 @@ def _get_options_events(**kwargs) -> Iterator[Dict[str, Any]]:
         "updated_at": "2018-09-10T08:10:05.478568Z"
     }
     """
-    yield from filter(
-        lambda x: x['type'] != 'expiration',
-        get_paginated_results(
-            get_client(), OPTIONS_BASE / 'events/', **kwargs
-        ),
-    )
+    yield from get_paginated_results(get_client(), OPTIONS_BASE / 'events/', **kwargs)

@@ -32,3 +32,10 @@ repos:
     rev: v1.5.4
     hooks:
     -   id: autopep8
+-   repo: local
+    hooks:
+    -   id: no-notebook-output
+        name: Disallow commits with Jupyter notebook output
+        language: python
+        entry: ./scripts/no-notebook-output-hook.py
+        files: .*\.ipynb$

@@ -1,0 +1,3 @@
+[submodule "pyrh"]
+	path = pyrh
+	url = https://github.com/domanchi/pyrh

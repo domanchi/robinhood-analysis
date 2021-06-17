@@ -48,7 +48,10 @@ that grant access to your account.
 ### Running the Analysis
 
 Finally, you can run the Jupyter notebook in the analysis/ folder using your preferred
-medium. Personally, I like the VSCode's built-in Jupyter kernel to do this.
+medium. Personally, I like the VSCode's built-in Jupyter kernel to do this. Be sure to
+configure your jupyter notebook to use the correct Python kernel (specifically, the
+one built by `make minimal` in `venv/bin/python`) as it will have reference to the
+`robinhood` library that powers the analysis.
 
 The notebooks will pull data from Robinhood's API (using the `pyrh` module, and credentials
 found in `session.json`), and cache them in `database.sqlite3`. This is why you may find that

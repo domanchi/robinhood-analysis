@@ -3,7 +3,9 @@ from contextlib import contextmanager
 from enum import Enum
 from functools import lru_cache
 from typing import Any
+from typing import Dict
 from typing import Generator
+from typing import Tuple
 from typing import Type
 
 from sqlalchemy import Column
@@ -29,7 +31,14 @@ class BaseMeta(DeclarativeMeta):
 
     It also injects a default `id` column, as a primary key.
     """
-    def __init__(cls, *args: Any, **kwargs: Any) -> None:
+    def __init__(
+        cls,
+        classname: str,
+        bases: Tuple[Any],
+        attributes: Dict[str, Any],
+        *args: Any,
+        **kwargs: Any
+    ) -> None:
         if cls.__name__ != 'Base':
             if not hasattr(cls, '__tablename__'):
                 # camel case to snake case
@@ -43,7 +52,13 @@ class BaseMeta(DeclarativeMeta):
             if not hasattr(cls, 'id'):
                 cls.id = Column(Integer, nullable=False, primary_key=True)
 
-        super().__init__(*args)
+                # NOTE(2021-06-17): For some reason, after sqlalchemy==1.4.10,
+                # injecting a class attribute during runtime does not work. As
+                # such, we need to inject this value in the attributes
+                # dictionary passed in.
+                attributes['id'] = cls.id
+
+        super().__init__(classname, bases, attributes, *args)
 
 
 Base = declarative_base(metaclass=BaseMeta)

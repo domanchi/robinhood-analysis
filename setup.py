@@ -7,7 +7,7 @@ setup(
     packages=find_packages(exclude=(['test*', 'tmp*', 'pyrh'])),
     version='0.1',
     license='GNU GPL v3',
-    instalL_requires=[
+    install_requires=[
         'pyotp',
         'sqlalchemy',
     ],

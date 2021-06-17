@@ -8,7 +8,7 @@ venv/bin/activate:
 	test -d venv || virtualenv venv
 	venv/bin/pip install -r requirements-minimal.txt
 	venv/bin/pip install -e .
-	./scripts/initialize_database.py
+	venv/bin/python -m scripts.initialize_database
 	touch venv/bin/activate
 
 clean:
